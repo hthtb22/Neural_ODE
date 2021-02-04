@@ -1,0 +1,100 @@
+\documentclass{article} 
+\usepackage{amsmath,amsthm}     
+\usepackage{graphicx}     
+\usepackage{hyperref} 
+\usepackage{url}
+\usepackage{amsfonts} 
+\usepackage{multicol}
+\usepackage{tikz}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\tridiag}{tridiag}
+\usetikzlibrary{positioning,chains,fit,shapes,calc}
+\theoremstyle{theorem}
+\newtheorem{theorem}{Theorem}
+
+\theoremstyle{definition}
+\newtheorem*{definition}{Definition}
+\newtheorem*{remark}{Remark}
+\newtheorem{proposition}{Proposition}
+
+\allowdisplaybreaks
+\usepackage{collectbox}
+\makeatletter
+\newcommand{\mybox}{%
+	\collectbox{%
+		\setlength{\fboxsep}{1pt}%
+		\fbox{\BOXCONTENT}%
+	}%
+}
+\@addtoreset{footnote}{page}
+\makeatother
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+	
+	
+	\title{Neural ODE}
+	
+	\author{Hoang Trung Hieu
+		%\scriptsize \\    
+		%Eötvös Loránd University \\               
+		%hthtb22@gmail.com
+	}                      
+	\date{2021}
+	%\maketitle
+	
+	\noindent  
+	\section{Adjoint sensitivity method}
+	Consider a problem where our aim is to minimize a function $L(z(t), \theta)$, where $z(t)$ is a solution of an initial value problem and $\theta$ are the parameters of the model, including parameters of a differential equation. Namely, with the assumption that the function $L$ can be written as an integral of $l$ function $$L(z(t),t)= \int _{0}^{T} l(z(t),t,\theta)dt.$$ We are trying to find $\min_{\theta} L(z(t),\theta)$ with the constraints: $$\left\{\begin{matrix}
+	\dot{z}(t)=f(z(t),t, \theta)	\\ 
+	z(0)=z_0(\theta)
+	\end{matrix}\right.$$
+The practical methods, especially the gradient-based methods which are used to optimize the loss function $L$ usually require calculating the total derivative $\frac{dL}{d\theta}$. It is not an easy task since $z(t)$ implicitly depends on $\theta$ through the ODE function $f$ and initial conditions $z_0$. Firstly, we roughly compute by the definition of total derivative $$\frac{dL}{d\theta}= \int_{0}^{T} \left[\frac{dl(z(t),t,\theta)}{d\theta}\right]dt=\int_{0}^{T} \left[\frac{\partial l}{\partial z(t)} \frac{dz(t)}{d \theta} + \frac{\partial l}{ \partial \theta}\right]dt$$
+The adjoint sensitivity method introduce the new adjoint variable $a(t)$ which appear the following adjusted loss function
+$$J=\int _{0}^{T} \left[l(z(t),t,\theta)+a(t)^T (f(z(t),t, \theta) -\dot{z}(t) )\right]dt +\mu^{T}(z(0)-z_0)$$ where $a(t)$ and $\mu$ are functions which associated with ODE constrains and will be chosen later. Note that, if both ODE conditions are satisfied then the adjusted loss function $J$ actually is the original function $L$. So, we will compute the full derivative on the function $J$ 
+$$\begin{aligned}	
+\frac{dJ}{d\theta}&= \int_{0}^{T} \left[\frac{dl}{d\theta} +a(t)^T\frac{d(f(z(t),t, \theta) -\dot{z}(t) )}{d\theta}  \right]dt + \mu^T \frac{d(z(0)-z_0)}{d\theta} \\&=\int_{0}^{T} \left[\frac{\partial l}{\partial z(t)} \frac{dz(t)}{d \theta} + \frac{\partial l}{ \partial \theta} +a(t)^T \left(\frac{\partial f}{\partial z(t)} \frac{dz(t)}{d \theta} + \frac{\partial f}{ \partial \theta}\right)\right]dt -\int_{0}^{T} a(t)^T\frac{d \dot{z}(t)}{d\theta}dt+\mu^T \left( \frac{dz(0)}{d\theta} -\frac{dz_0}{d\theta} \right)  \end{aligned} $$
+	where we can use the integration by part to compute the second term
+	$$\begin{aligned}\int_{0}^{T} a(t)^T\frac{d \dot{z}(t)}{d\theta}dt &= a(t)^T\frac{d z(t)}{d\theta} \Big| _{0}^{T}-\int_{0}^{T} \dot{a}(t)^T\frac{d z(t)}{d\theta}dt \\ &= a(T)^T\frac{d z(T)}{d\theta}-a(0)^T\frac{d z(0)}{d\theta} -\int_{0}^{T} \dot{a}(t)^T\frac{d z(t)}{d\theta}dt  \end{aligned}$$
+	Hence,
+	$$\begin{aligned}	
+		\frac{dJ}{d\theta}=& \int_{0}^{T} \left[\frac{\partial l}{\partial z(t)} \frac{dz(t)}{d \theta} +  \frac{\partial l}{ \partial \theta} +a(t)^T \left(\frac{\partial f}{\partial z(t)} \frac{dz(t)}{d \theta} + \frac{\partial f}{ \partial \theta}\right)+ \dot{a}(t)^T\frac{d z(t)}{d\theta}\right]dt \\ &-a(T)^T\frac{d z(T)}{d\theta}+a(0)^T\frac{d z(0)}{d\theta}+\mu^T \left( \frac{dz(0)}{d\theta} -\frac{dz_0}{d\theta} \right) \\ =& \int_{0}^{T} \left[ \left( \frac{\partial l}{\partial z(t)}+a(t)^T \frac{\partial f}{\partial z(t)}+ \dot{a}(t)^T \right)\frac{dz(t)}{d \theta} +  \frac{\partial l}{ \partial \theta}  +a(t)^T \frac{\partial f}{ \partial \theta}\right]dt\\ &-a(T)^T\frac{d z(T)}{d\theta}+\left(a(0)+\mu\right)^T\frac{d z(0)}{d\theta}-\mu^T\frac{dz_0}{d\theta}   \end{aligned} $$
+	Chose $a(t), \mu$ such that we can omit the difficult terms
+	$$\left\{\begin{matrix}
+	a(T)=0	\\ 
+		a(0) + \mu=0 \\
+		\dfrac{\partial l}{\partial z(t)}+a(t)^T \dfrac{\partial f}{\partial z(t)}+ \dot{a}(t)^T=0
+	\end{matrix}\right.$$
+So, we can rewrite
+$$\frac{dJ}{d\theta}=\int_{0}^{T} \left[  \frac{\partial l}{ \partial \theta}  +a(t)^T \frac{\partial f}{ \partial \theta}\right]dt-\mu^T\frac{dz_0}{d\theta}=\frac{\partial L}{ \partial \theta}  +\int_{0}^{T}  a(t)^T \frac{\partial f}{ \partial \theta}dt+a(0)^T\frac{dz_0}{d\theta}  $$
+\textbf{Problem:} There is a process following an unknown ODE and some observations along its trajectory
+$$\left\{\begin{matrix}\dfrac{dz(t)}{dt} = f(z(t), t)  \\ \{(z_0, t_0),(z_1, t_1),...,(z_M, t_M)\} - \text{observations}\end{matrix}\right.$$
+Is it possible to find an approximation $\widehat{f}(z, t, \theta)$ of dynamics function $f(z, t)$?
+
+First, consider a somewhat simpler task: there are only 2 observations, at the beginning and at the end of the trajectory, $(z_0, t_0), (z_1, t_1)$. One starts the evolution of the system from $z_0, t_0$ for time $t_1 - t_0$ with some parameterized dynamics function using any ODE initial value solver. After that, one ends up being at some new state $\hat{z_1}, t_1$, compares it with the observation $z_1$, and tries to minimize the difference by varying the parameters $\theta.$\\
+Or, more formally, consider optimizing the following loss function $ L(\hat{z_1})$ 
+$$L(z(t_1)) = L \Big(z(t_0)+ \int_{t_0}^{t_1} f(z(t), t, \theta)dt \Big) = L \big( \text{ODESolve}(z(t_0), f, t_0, t_1, \theta) \big)$$
+ On this specify problem we can see the loss function does not rely on any parameters directly, so $\dfrac{\partial L}{\partial \theta}=0$. Note that we consider $L()$ as a scalar-valued loss function, whose input is the result of an ODE solver.
+ The loss depends only on the last point $z(T)$. Therefore, the function $l(z(t), t, \theta)$ is non-zero only at time point $T$. We have to account for the direct dependency of the loss on the last hidden state. Thus, we add the gradient of the loss to the constraint on the last time point:
+ $$\left\{\begin{matrix}
+ 	a(T)=	\dfrac{\partial l}{\partial z(t)}	\\ 
+  \dot{a}(t)^T=a(t)^T \dfrac{\partial f}{\partial z(t)}
+ \end{matrix}\right.$$
+ If we denoted the parameters of the ODE function and the parameters of the initial value $z_0$ as $\theta$.
+ How do we compute the gradient with respect to these parameters separately?
+ If theta are the parameters of the ODE:
+ $$\frac{dL}{d\theta}= \int_{0}^{T}  a(t)^T \frac{\partial f}{ \partial \theta}dt$$
+ If theta are the parameters of the initial value:
+ $$\frac{dL}{d\theta}= a(0)^T\frac{dz_0}{d\theta}$$
+ In chapter 4, the adjoint variable plays a role of the gradient with respect to the solution: $a(t)=\frac{\partial L}{\partial z(t)}$
+ Thus, equation 2.75 follows from the standard chain rule: $$\frac{\partial L}{\partial \theta}=a(0)^T \frac{dz_0}{d \theta}=\frac{\partial L}{\partial z(0)} \frac{dz_0}{d \theta}$$
+	%\begin{thebibliography}{5}
+		
+	%	\bibitem{example1}
+	%	E.Hairer, (1996)  \textit{G.Wanner Solving Ordinary Differential Equations II - stiff and 			differential-algebraic problems}, Springer,15-39 	
+	%\end{thebibliography}
+	
+\end{document}
